@@ -1,0 +1,24 @@
+# Local .terraform directories
+.terraform/
+.env
+# Terraform state files
+*.tfstate
+*.tfstate.*
+steps.txt
+jenkins-password.txt
+jenkins-ca.crt
+jenkins-sa-token.txt
+.k8s/
+
+# Crash logs
+crash.log
+
+# Sensitive variables
+# *.tfvars
+# *.tfvars.json
+
+# Terraform lock file
+.terraform.lock.hcl
+
+# Providers
+**/terraform-provider-*
