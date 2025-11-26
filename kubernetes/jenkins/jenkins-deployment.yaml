@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins-deployment
+  namespace: jenkins-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jenkins-pod
+  template:
+    metadata:
+      labels:
+        app: jenkins-pod
+    spec:
+      nodeSelector:
+        role: jenkins-ng
+      securityContext:
+        fsGroup: 1000
+      serviceAccountName: jenkins-sa
+      
+      initContainers:
+        - name: fix-permissions
+          image: busybox:1.36
+          command:
+          - sh
+          - -c
+          - |
+            echo "Fixing permissions on /var/jenkins_home..."
+            chown -R 1000:1000 /var/jenkins_home || true
+            chmod -R g+rwX /var/jenkins_home || true
+            echo "Done"
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: jenkins-home
+              mountPath: /var/jenkins_home
+      
+      containers:
+        - name: jenkins-container
+          image: jenkins/jenkins:lts
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 50000
+              name: agent
+          
+          # Resource limits for better cluster management
+          resources:
+            requests:
+              memory: "500Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "2"
+          
+          volumeMounts:
+            - name: jenkins-home
+              mountPath: /var/jenkins_home
+      
+      volumes:
+        - name: jenkins-home
+          persistentVolumeClaim:
+            claimName: jenkins-pvc
+
+

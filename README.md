@@ -1,277 +1,302 @@
-# DEPI Graduation Project: URL Shortener on AWS EKS
+# URL Shortener - DEPI Graduation Project
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Terraform](https://img.shields.io/badge/Terraform-1.0+-623CE4)](https://www.terraform.io/)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.28+-326CE5)](https://kubernetes.io/)
-[![Jenkins](https://img.shields.io/badge/Jenkins-LTS-D24939)](https://www.jenkins.io/)
+A Laravel-based URL shortener application deployed on AWS EKS with automated CI/CD using Jenkins and Kaniko.
 
-A comprehensive URL shortener application built with Flask, containerized with Docker, and deployed on AWS EKS using Infrastructure as Code (Terraform), Kubernetes orchestration, and Jenkins CI/CD pipelines.
-
-## Table of Contents
-- [Project Description](#project-description)
-- [Architecture Overview](#architecture-overview)
-- [Prerequisites](#prerequisites)
-- [Step-by-Step Setup Guide](#step-by-step-setup-guide)
-  - [1. Provision AWS EKS Cluster](#1-provision-aws-eks-cluster)
-  - [2. Configure Kubernetes Access](#2-configure-kubernetes-access)
-  - [3. Deploy Kubernetes Manifests](#3-deploy-kubernetes-manifests)
-- [Jenkins Pipeline Configuration](#jenkins-pipeline-configuration)
-- [Usage](#usage)
-- [API Endpoints](#api-endpoints)
-- [Contributing](#contributing)
-- [License](#license)
-
-## Project Structure
+## 🏗️ Architecture
 
 ```
-NHA-058/                       # Root project directory
-├── .gitignore                 # Git ignore file
-├── eks.tf                     # Terraform configuration for EKS cluster
-├── iam.tf                     # IAM roles and policies
-├── jenkins_password.txt       # Jenkins admin password file
-├── jenkins-password.sh        # Script to retrieve Jenkins password
-├── Jenkinsfile                # Jenkins pipeline definition
-├── outputs.tf                 # Terraform outputs
-├── provider.tf                # AWS provider configuration
-├── README.md                  # Project documentation
-├── security_groups.tf         # Security groups configuration
-├── terraform.tfvars           # Terraform variables file
-├── variables.tf               # Variable definitions
-├── vpc.tf                     # VPC configuration
-├── app/                       # Application source code directory
-│   ├── app.py                 # Flask application code
-│   ├── Dockerfile             # Docker image definition
-│   ├── index.html             # HTML interface
-│   ├── README.md              # Application documentation
-│   ├── requirements.txt       # Python dependencies
-│   └── static/                # Static files directory
-│       └── Landing_bg.png     # Landing page background image
-├── k8s/                       # Kubernetes manifests directory
-│   ├── app-deployment.yaml    # Application deployment manifest
-│   ├── app-namespace.yaml     # Application namespace
-│   ├── app-service.yaml       # Application service
-│   ├── jenkins-deployment.yaml# Jenkins deployment manifest
-│   ├── jenkins-namespace.yaml # Jenkins namespace
-│   ├── jenkins-pvc.yaml       # Jenkins persistent volume claim
-│   ├── jenkins-rbac-binding.yaml# Jenkins RBAC role binding
-│   ├── jenkins-rbac-role.yaml # Jenkins RBAC role
-│   ├── jenkins-sa.yaml        # Jenkins service account
-│   ├── jenkins-service.yaml   # Jenkins service
-│   └── storageclass-ebs.yaml  # EBS storage class
-└── src/                       # Source images directory
-    ├── Graduation Project.png # Architecture diagram image
-    └── Landing_bg.png         # Landing page background image
+┌─────────────────────────────────────────────────────────────┐
+│                         AWS EKS Cluster                     │
+│                                                             │
+│  ┌──────────────────────┐      ┌──────────────────────┐   │
+│  │   jenkins-ns         │      │      app-ns          │   │
+│  │                      │      │                      │   │
+│  │  ┌────────────────┐  │      │  ┌────────────────┐  │   │
+│  │  │ Jenkins        │  │      │  │ URL Shortener  │  │   │
+│  │  │ (CI/CD)        │──┼──────┼─▶│ Application    │  │   │
+│  │  └────────────────┘  │      │  └────────────────┘  │   │
+│  │                      │      │                      │   │
+│  └──────────────────────┘      └──────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Project Description
+## 📋 Prerequisites
 
-This project demonstrates a full-stack DevOps implementation of a URL shortener service. The application is a simple Flask-based API that allows users to shorten long URLs into short codes, store them in an SQLite database, and redirect to the original URLs. The infrastructure is provisioned using Terraform, deployed on Kubernetes (EKS), and automated via Jenkins pipelines.
+- AWS Account with appropriate permissions
+- AWS CLI configured
+- kubectl installed
+- Terraform v1.0+
+- Docker Hub account
+- Git
 
-Key features:
-- URL shortening and redirection
-- SQLite database for persistence
-- Containerized with Docker
-- Scalable deployment on AWS EKS
-- CI/CD with Jenkins
-- Persistent storage for Jenkins using EBS-backed volumes
-- RBAC for secure Jenkins access to manage deployments
+## 🚀 Deployment Guide
 
-## Architecture Overview
+### Step 1: Infrastructure Setup with Terraform
 
-The architecture consists of the following components:
+Deploy the EKS cluster and supporting infrastructure:
 
-- **AWS Infrastructure**: VPC, subnets, security groups, EKS cluster with dedicated node groups for Jenkins and the application.
-- **Kubernetes**: Namespaces for `app-ns` and `jenkins-ns`, deployments, services, persistent volume claims, storage classes, and RBAC for Jenkins to manage app deployments.
-- **Application**: Flask app running in a Docker container, exposed via a LoadBalancer service.
-- **CI/CD**: Jenkins pipeline that builds Docker images, pushes to DockerHub, and deploys to EKS.
-- **Storage**: EBS-backed persistent volumes for Jenkins home directory.
-
-![Architecture Diagram](src/Graduation%20Project.png)
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   GitHub Repo   │ -> │     Jenkins     │ -> │     AWS EKS     │
-│                 │    │   (CI/CD)       │    │   (Deployment)  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │   URL Shortener │
-                    │    (Flask App)  │
-                    └─────────────────┘
-```
-
-Detailed Components:
-- **Namespaces**: Separate namespaces for application (`app-ns`) and Jenkins (`jenkins-ns`) for isolation.
-- **Storage**: Custom StorageClass (`jenkins-ebs-sc`) using EBS CSI driver, with PVC (`jenkins-pvc`) for persistent Jenkins data.
-- **RBAC**: ServiceAccount (`jenkins`) in `jenkins-ns`, Role and RoleBinding in `app-ns` allowing Jenkins to manage deployments and pods in the app namespace.
-- **Deployments**: Jenkins deployment with init container for permissions, sidecar Docker-in-Docker; App deployment with Flask container.
-- **Services**: LoadBalancer services for external access to Jenkins UI and the URL shortener app.
-
-## Prerequisites
-
-Before setting up the project, ensure you have the following:
-
-- **AWS Account**: With permissions to create EKS clusters, EC2 instances, VPCs, IAM roles, and ECR repositories.
-- **Tools**:
-  - Terraform (>= 1.0)
-  - kubectl (configured for EKS)
-  - AWS CLI (configured with your credentials)
-  - Docker
-  - Git
-- **Knowledge**: Basic understanding of AWS, Kubernetes, and CI/CD pipelines.
-- **Resources**: Sufficient AWS limits for EKS, EC2, and EBS.
-
-## Step-by-Step Setup Guide
-
-### 1. Provision AWS EKS Cluster
-
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/ibrahim-atef/DEPI_Graduation_Project.git
-   cd DEPI_Graduation_Project
-   ```
-
-2. **Initialize Terraform**:
-   ```bash
-   terraform init
-   ```
-
-3. **Review and Customize Variables**:
-   - Edit `terraform.tfvars` to set your desired values (e.g., region, cluster name).
-   - Check `variables.tf` for available options.
-
-4. **Plan the Deployment**:
-   ```bash
-   terraform plan
-   ```
-
-5. **Apply the Infrastructure**:
-   ```bash
-   terraform apply
-   ```
-   This will create:
-   - VPC with public subnets
-   - EKS cluster with two node groups (jenkins-ng and app-ng)
-   - IAM roles and policies
-   - Security groups
-
-6. **Verify Cluster Creation**:
-   ```bash
-   aws eks describe-cluster --name ci-cd-eks --region us-west-2
-   ```
-
-### 2. Configure Kubernetes Access
-
-1. **Update kubeconfig**:
-   ```bash
-   aws eks update-kubeconfig --region us-west-2 --name ci-cd-eks
-   ```
-
-2. **Verify Access**:
-   ```bash
-   kubectl get nodes
-   kubectl get namespaces
-   ```
-
-### 3. Deploy Kubernetes Manifests
-
-Deploy the manifests in the following order to ensure dependencies are met:
-
-1. **Apply Namespaces**:
-   ```bash
-   kubectl apply -f k8s/app-namespace.yaml
-   kubectl apply -f k8s/jenkins-namespace.yaml
-   ```
-
-2. **Apply Storage Classes**:
-   ```bash
-   kubectl apply -f k8s/storageclass-ebs.yaml
-   ```
-
-3. **Apply RBAC (Service Account, Role, Binding)**:
-   ```bash
-   kubectl apply -f k8s/jenkins-sa.yaml
-   kubectl apply -f k8s/jenkins-rbac-role.yaml
-   kubectl apply -f k8s/jenkins-rbac-binding.yaml
-   ```
-
-4. **Apply Persistent Volume Claims**:
-   ```bash
-   kubectl apply -f k8s/jenkins-pvc.yaml
-   ```
-
-
-
-5. **Deploy Applications**:
-   ```bash
-   kubectl apply -f k8s/jenkins-deployment.yaml
-   kubectl apply -f k8s/app-deployment.yaml
-   ```
-
-6. **Apply Services**:
-   ```bash
-   kubectl apply -f k8s/jenkins-service.yaml
-   kubectl apply -f k8s/app-service.yaml
-   ```
-
-7. **Verify Deployments**:
-   ```bash
-   kubectl get pods -n app-ns
-   kubectl get pods -n jenkins-ns
-   kubectl get services -n jenkins-ns
-   kubectl get services -n app-ns
-   ```
-
-8. **Get Jenkins Admin Password** (if needed):
-   Run the `jenkins-password.sh` script or manually retrieve from the pod:
-   ```bash
-   kubectl exec -n jenkins-ns -it $(kubectl get pods -n jenkins-ns -l app=jenkins-pod -o jsonpath='{.items[0].metadata.name}') -- cat /var/jenkins_home/secrets/initialAdminPassword
-   ```
-
-## Jenkins Pipeline Configuration
-
-The Jenkins pipeline is defined in `Jenkinsfile` and includes the following stages:
-
-1. **Checkout**: Pulls the latest code from the GitHub repository.
-2. **Build Docker Image**: Builds the Docker image for the Flask app.
-3. **Push to DockerHub**: Tags and pushes the image to DockerHub.
-4. **Deploy to EKS**: Updates the Kubernetes deployment with the new image and waits for rollout.
-
-To set up the pipeline:
-
-1. Access Jenkins UI (via LoadBalancer service in `jenkins-ns`).
-2. Create a new pipeline job.
-3. Configure it to use the `Jenkinsfile` from the repository.
-4. Ensure AWS credentials are configured in Jenkins for EKS access.
-
-## Usage
-
-Once deployed, access the application via the LoadBalancer URL (check `kubectl get services -n app-ns`).
-
-### API Endpoints
-
-- `GET /`: Serves a simple HTML interface or API info.
-- `GET /health`: Health check endpoint.
-- `POST /shorten`: Shorten a URL. Body: `{"url": "https://example.com"}`.
-- `GET /<short_code>`: Redirect to the original URL.
-- `GET /stats`: Get statistics (total shortened URLs).
-- `GET /list`: List recent shortened URLs.
-
-Example usage with curl:
 ```bash
-curl -X POST http://<loadbalancer-url>/shorten -H "Content-Type: application/json" -d '{"url": "https://www.google.com"}'
+cd terraform
+
+# Initialize Terraform
+terraform init
+
+# Review the plan
+terraform plan
+
+# Apply the configuration
+terraform apply
 ```
 
-## Team Members
+**What gets created:**
+- VPC with public subnets across 2 availability zones
+- EKS cluster with control plane
+- Two node groups (jenkins-ng and app-ng)
+- Security groups for EKS, nodes, and load balancers
+- IAM roles and policies
+- EBS CSI driver for persistent storage
 
-Group 58
+### Step 2: Configure kubectl
 
-| Name | Email |
-|------|-------|
-| Ibrahim Ahmed Ahmed Mintal ( Team Leader) | ibrahim.mintal@gmail.com |
-| Mahmoud Ahmed Mohamed | mahmoud.ahmedd198@gmail.com |
-| Mohamed Nasser Mohamed | mn265944@gmail.com |
-| George Michel Fawzy | georgesmichel926@gmail.com |
-| Mohamed Fathy Abdelrazik | engmohamedalex@gmail.com |
+```bash
+# Update kubeconfig to connect to the EKS cluster
+aws eks update-kubeconfig --region us-east-1 --name depi-graduation
+```
+
+### Step 3: Deploy Namespaces
+
+```bash
+cd ../kubernetes
+
+# Create namespaces
+kubectl apply -f namespaces/
+```
+
+### Step 4: Deploy Jenkins
+
+```bash
+cd jenkins
+
+# Deploy in order:
+kubectl apply -f storageclass-ebs.yaml
+kubectl apply -f jenkins-pvc.yaml
+kubectl apply -f jenkins-sa.yaml
+kubectl apply -f jenkins-role-app-deployment.yaml
+kubectl apply -f jenkins-rolebinding-app-deployment.yaml
+kubectl apply -f jenkins-role-pod-management.yaml
+kubectl apply -f jenkins-rolebinding-pod-management.yaml
+kubectl apply -f jenkins-deployment.yaml
+kubectl apply -f jenkins-service.yaml
+```
+
+**Wait for Jenkins to be ready:**
+```bash
+kubectl rollout status deployment/jenkins-deployment -n jenkins-ns
+```
+
+### Step 5: Access Jenkins
+
+Get the LoadBalancer URL:
+```bash
+kubectl get svc jenkins-service -n jenkins-ns
+```
+
+Access Jenkins at: `http://<EXTERNAL-IP>:8080`
+
+**Get initial admin password:**
+```bash
+kubectl exec -n jenkins-ns <jenkins-pod-name> -- cat /var/jenkins_home/secrets/initialAdminPassword
+```
+
+### Step 6: Configure Jenkins
+
+1. **Install Required Plugins:**
+   - Kubernetes plugin
+   - Pipeline plugin
+
+2. **Add DockerHub Credentials:**
+   - Go to: Manage Jenkins → Manage Credentials
+   - Add credentials with ID: `dockerhub-credentials`
+   - Username: Your DockerHub username
+   - Password: Your DockerHub token
+
+3. **Configure Kubernetes Cloud:**
+   - Go to: Manage Jenkins → Manage Nodes and Clouds → Configure Clouds
+   - Add Kubernetes cloud:
+     - **Kubernetes URL**: `https://kubernetes.default.svc.cluster.local`
+     - **Kubernetes Namespace**: `jenkins-ns`
+     - **Jenkins URL**: `http://jenkins-service.jenkins-ns.svc.cluster.local:8080`
+     - **Jenkins tunnel**: `jenkins-service.jenkins-ns.svc.cluster.local:50000`
+   - Test connection (should show "Connected to Kubernetes...")
+
+### Step 7: Create Jenkins Pipeline
+
+1. **Create New Pipeline Job:**
+   - New Item → Pipeline
+   - Name: `shortner-app`
+
+2. **Configure Pipeline:**
+   - Definition: Pipeline script from SCM
+   - SCM: Git
+   - Repository URL: `https://github.com/Mohamedfathy90/URL-Shortner-DEPI.git`
+   - Branch: `main`
+   - Script Path: `Jenkinsfile-kaniko`
+
+3. **Save and Build**
+
+### Step 8: Deploy Application (Manual - First Time)
+
+```bash
+cd ../app
+
+# Deploy application
+kubectl apply -f app-deployment.yaml
+kubectl apply -f app-service.yaml
+
+# Wait for deployment
+kubectl rollout status deployment/app-deployment -n app-ns
+```
+
+**Get application URL:**
+```bash
+kubectl get svc myapp-service -n app-ns
+```
+
+Access your application at: `http://<EXTERNAL-IP>`
+
+## 🔄 CI/CD Pipeline
+
+The Jenkins pipeline automatically:
+
+1. **Checkout** - Pulls code from GitHub
+2. **Build & Push** - Builds Docker image using Kaniko and pushes to DockerHub
+3. **Deploy** - Updates the deployment in EKS with the new image
+
+### Pipeline Stages
+
+```groovy
+Checkout → Build & Push (Kaniko) → Deploy to EKS
+```
+
+## 📁 Project Structure
+
+```
+.
+├── terraform/                 # Infrastructure as Code
+│   ├── modules/
+│   │   ├── vpc/              # VPC module
+│   │   ├── security-groups/  # Security groups module
+│   │   ├── iam/              # IAM roles module
+│   │   ├── eks/              # EKS cluster module
+│   │   └── ebs-csi/          # EBS CSI driver module
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
+│   └── providers.tf
+│
+├── kubernetes/               # Kubernetes manifests
+│   ├── namespaces/
+│   │   ├── app-namespace.yaml
+│   │   └── jenkins-namespace.yaml
+│   ├── jenkins/
+│   │   ├── storageclass-ebs.yaml
+│   │   ├── jenkins-pvc.yaml
+│   │   ├── jenkins-sa.yaml
+│   │   ├── jenkins-role-*.yaml
+│   │   ├── jenkins-rolebinding-*.yaml
+│   │   ├── jenkins-deployment.yaml
+│   │   └── jenkins-service.yaml
+│   └── app/
+│       ├── app-deployment.yaml
+│       └── app-service.yaml
+│
+└── Jenkinsfile-kaniko        # CI/CD pipeline definition
+```
+
+## 🔐 Security Features
+
+- **No Privileged Containers**: Uses Kaniko instead of Docker-in-Docker
+- **RBAC**: Least privilege access with dedicated service accounts
+- **Namespace Isolation**: Jenkins and app run in separate namespaces
+- **IAM Roles**: Proper AWS IAM roles for EKS and EBS CSI
+- **Security Groups**: Network isolation at VPC level
+
+## 🛠️ Technologies Used
+
+- **Infrastructure**: Terraform, AWS EKS, VPC, EBS
+- **Container Orchestration**: Kubernetes
+- **CI/CD**: Jenkins with Kubernetes plugin
+- **Container Build**: Kaniko (daemon-less)
+- **Container Registry**: Docker Hub
+
+## 📊 Resource Specifications
+
+### Jenkins Pod
+- Memory: 1-2Gi
+- CPU: 0.5-2 cores
+- Storage: 10Gi EBS volume
+
+### Application Pod
+- Replicas: 1
+- Container Port: 80
+- Service Type: LoadBalancer
+
+### Node Groups
+- **jenkins-ng**: t3.small instances
+- **app-ng**: t3.small instances
+
+## 🔍 Monitoring & Troubleshooting
+
+### Check Pod Status
+```bash
+# Jenkins pods
+kubectl get pods -n jenkins-ns
+
+# Application pods
+kubectl get pods -n app-ns
+```
+
+### View Logs
+```bash
+# Jenkins logs
+kubectl logs -n jenkins-ns <jenkins-pod-name>
+
+# Application logs
+kubectl logs -n app-ns <app-pod-name>
+```
+
+### Check Services
+```bash
+kubectl get svc -n jenkins-ns
+kubectl get svc -n app-ns
+```
+
+### Describe Resources
+```bash
+kubectl describe pod <pod-name> -n <namespace>
+kubectl describe deployment <deployment-name> -n <namespace>
+```
+
+## 🧹 Cleanup
+
+To destroy all resources:
+
+```bash
+# Delete Kubernetes resources
+kubectl delete -f kubernetes/app/
+kubectl delete -f kubernetes/jenkins/
+kubectl delete -f kubernetes/namespaces/
+
+# Destroy infrastructure
+cd terraform
+terraform destroy
+```
+
+
+
+
+
+
+
+

@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-deployment
+  namespace: app-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-pod
+  template:
+    metadata:
+      labels:
+        app: app-pod
+    spec:
+      nodeSelector:
+        role: app-ng   
+      containers:
+        - name: app-container
+          image: mohfathy/url-shortner-depi-app
+          ports:
+            - containerPort: 8000

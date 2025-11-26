@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jenkins-role-pod-management
+  namespace: jenkins-ns
+rules:
+# Allow Jenkins to manage pods (for pipeline agents)
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+# Allow Jenkins to get pod logs
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list", "watch"]
+
+# Allow Jenkins to exec into pods
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create", "get"]
+
+# Allow Jenkins to manage pod status
+- apiGroups: [""]
+  resources: ["pods/status"]
+  verbs: ["get", "list", "watch"]
